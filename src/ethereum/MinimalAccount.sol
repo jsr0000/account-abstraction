@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: UNLICENSED
+// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
 import {IAccount} from "lib/account-abstraction/contracts/interfaces/IAccount.sol";
@@ -10,20 +10,60 @@ import {SIG_VALIDATION_FAILED, SIG_VALIDATION_SUCCESS} from "lib/account-abstrac
 import {IEntryPoint} from "lib/account-abstraction/contracts/interfaces/IEntryPoint.sol";
 
 contract MinimalAccount is IAccount, Ownable {
+    error MinimalAccount__NotFromEntryPoint();
+    error MinimalAccount__NotFromEntryPointOrOwner();
+    error MinimalAccount__ExecutionFailed(bytes result);
     IEntryPoint private immutable i_entryPoint;
+
+    modifier requireFromEntryPoint() {
+        if (msg.sender != address(i_entryPoint)) {
+            revert MinimalAccount__NotFromEntryPoint();
+        }
+        _;
+    }
+
+    modifier requireFromEntryPointOrOwner() {
+        if (msg.sender != address(i_entryPoint) && msg.sender != owner()) {
+            revert MinimalAccount__NotFromEntryPointOrOwner();
+        }
+        _;
+    }
 
     constructor(address entryPoint) Ownable(msg.sender) {
         i_entryPoint = IEntryPoint(entryPoint);
+    }
+
+    receive() external payable {}
+
+    /*//////////////////////////////////////////////////////////////
+                           EXTERNAL FUNCTIONS
+    //////////////////////////////////////////////////////////////*/
+
+    function execute(
+        address dest,
+        uint256 value,
+        bytes calldata functionData
+    ) external {
+        (bool success, bytes memory result) = dest.call{value: value}(
+            functionData
+        );
+        if (!success) {
+            revert MinimalAccount__ExecutionFailed(result);
+        }
     }
 
     function validateUserOp(
         PackedUserOperation calldata userOp,
         bytes32 userOpHash,
         uint256 missingAccountFunds
-    ) external returns (uint256 validationData) {
+    ) external requireFromEntryPoint returns (uint256 validationData) {
         validationData = _validateSignature(userOp, userOpHash);
         _payPrefund(missingAccountFunds);
     }
+
+    /*//////////////////////////////////////////////////////////////
+                           INTERNAL FUNCTIONS
+    //////////////////////////////////////////////////////////////*/
 
     // EIP-191 version of the signed hash
     function _validateSignature(
@@ -51,6 +91,10 @@ contract MinimalAccount is IAccount, Ownable {
             }
         }
     }
+
+    /*//////////////////////////////////////////////////////////////
+                                GETTERS
+    //////////////////////////////////////////////////////////////*/
 
     function getEntryPoint() external view returns (address) {
         return address(i_entryPoint);
