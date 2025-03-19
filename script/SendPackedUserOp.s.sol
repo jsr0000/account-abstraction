@@ -86,7 +86,7 @@ contract SendPackedUserOp is Script {
         }
         userOp.signature = abi.encodePacked(r, s, v);
         return userOp;
-    } 
+    }
 
     function _generateUnsignedUserOperation(
         bytes memory callData,
