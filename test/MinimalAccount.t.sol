@@ -6,7 +6,9 @@ import {MinimalAccount} from "../src/ethereum/MinimalAccount.sol";
 import {DeployMinimal} from "../script/DeployMinimal.s.sol";
 import {ERC20Mock} from "lib/openzeppelin-contracts/contracts/mocks/token/ERC20Mock.sol";
 import {HelperConfig} from "../script/HelperConfig.s.sol";
-import {SendPackedUserOp} from "../script/SendPackedUserOp.s.sol";
+import {SendPackedUserOp, PackedUserOperation, IEntryPoint} from "../script/SendPackedUserOp.s.sol";
+import {ECDSA} from "lib/openzeppelin-contracts/contracts/utils/cryptography/ECDSA.sol";
+import {MessageHashUtils} from "lib/openzeppelin-contracts/contracts/utils/cryptography/MessageHashUtils.sol";
 
 contract MinimalAccountTest is Test {
     using MessageHashUtils for bytes32;
@@ -21,6 +23,7 @@ contract MinimalAccountTest is Test {
         DeployMinimal deployer = new DeployMinimal();
         (helperConfig, minimalAccount) = deployer.deployMinimalAccount();
         usdc = new ERC20Mock();
+        senderPackedUserOp = new SendPackedUserOp();
     }
 
     function testOwnerCanExecuteCommands() public {
@@ -57,6 +60,7 @@ contract MinimalAccountTest is Test {
     }
 
     function testRecoverSignedOp() public {
+        // Arrange
         assertEq(usdc.balanceOf(address(minimalAccount)), 0);
         address dest = address(usdc);
         uint256 value = 0;
@@ -65,5 +69,66 @@ contract MinimalAccountTest is Test {
             address(minimalAccount),
             USDC_AMOUNT
         );
+        bytes memory executeCallData = abi.encodeWithSelector(
+            MinimalAccount.execute.selector,
+            dest,
+            value,
+            functionData
+        );
+        PackedUserOperation memory packedUserOp = senderPackedUserOp
+            .generateSignedUserOperation(
+                executeCallData,
+                helperConfig.getConfig(),
+                address(minimalAccount)
+            );
+        bytes32 userOperationHash = IEntryPoint(
+            helperConfig.getConfig().entryPoint
+        ).getUserOpHash(packedUserOp);
+
+        // Act
+        address actualSigner = ECDSA.recover(
+            userOperationHash.toEthSignedMessageHash(),
+            packedUserOp.signature
+        );
+
+        // Assert
+        assertEq(actualSigner, minimalAccount.owner());
+    }
+
+    function testValidationOfUserOps() public {
+        // Arrange
+        assertEq(usdc.balanceOf(address(minimalAccount)), 0);
+        address dest = address(usdc);
+        uint256 value = 0;
+        bytes memory functionData = abi.encodeWithSelector(
+            ERC20Mock.mint.selector,
+            address(minimalAccount),
+            USDC_AMOUNT
+        );
+        bytes memory executeCallData = abi.encodeWithSelector(
+            MinimalAccount.execute.selector,
+            dest,
+            value,
+            functionData
+        );
+        PackedUserOperation memory packedUserOp = senderPackedUserOp
+            .generateSignedUserOperation(
+                executeCallData,
+                helperConfig.getConfig(),
+                address(minimalAccount)
+            );
+        bytes32 userOperationHash = IEntryPoint(
+            helperConfig.getConfig().entryPoint
+        ).getUserOpHash(packedUserOp);
+        uint256 missingAccountFunds = 1e18;
+
+        // Act
+        vm.prank(helperConfig.getConfig().entryPoint);
+        uint256 validationData = minimalAccount.validateUserOp(
+            packedUserOp,
+            userOperationHash,
+            missingAccountFunds
+        );
+        assertEq(validationData, 0);
     }
 }

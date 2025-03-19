@@ -10,13 +10,15 @@ contract HelperConfig is Script {
     struct NetworkConfig {
         address entryPoint;
         address account;
+        address usdc;
     }
 
     uint256 constant ETH_SEPOLIA_CHAIN_ID = 11155111;
     uint256 constant ZKSYNC_SEPOLIA_CHAIN_ID = 300;
     uint256 constant LOCAL_CHAIN_ID = 31337;
     address constant BURNER_WALLET = 0x46efA6D7B7b5fc2F63CaA7855a3e6ab31cf8CD47;
-    address constant FOUNDRY_DEAFULT_ACCOUNT = 0x742d35cc6634c0532925a3b844f5131b013b2c1f;
+    // address constant FOUNDRY_DEAFULT_ACCOUNT = 0x742d35cc6634C0532925A3b844F5131b013b2c1F;
+    address constant ANVIL_DEFAULT_ACCOUNT = 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266;
 
     NetworkConfig public localNetworkConfig;
     mapping(uint256 chainId => NetworkConfig) public networkConfigs;
@@ -25,13 +27,13 @@ contract HelperConfig is Script {
         networkConfigs[ETH_SEPOLIA_CHAIN_ID] = getSepoliaEthConfig();
     }
 
-    function getConfig() public view returns (NetworkConfig memory) {
+    function getConfig() public returns (NetworkConfig memory) {
         return getConfigByChainId(block.chainid);
     }
 
     function getConfigByChainId(
         uint256 chainId
-    ) public view returns (NetworkConfig memory) {
+    ) public returns (NetworkConfig memory) {
         if (chainId == LOCAL_CHAIN_ID) {
             return getOrCreateAnvilConfig();
         } else if (networkConfigs[chainId].account != address(0)) {
@@ -45,7 +47,8 @@ contract HelperConfig is Script {
         return
             NetworkConfig({
                 entryPoint: 0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789,
-                account: BURNER_WALLET
+                account: BURNER_WALLET,
+                usdc: 0x53844F9577C2334e541Aec7Df7174ECe5dF1fCf0
             });
     }
 
@@ -54,21 +57,23 @@ contract HelperConfig is Script {
         pure
         returns (NetworkConfig memory)
     {
-        return NetworkConfig({entryPoint: address(0), account: BURNER_WALLET});
+        return NetworkConfig({entryPoint: address(0), account: BURNER_WALLET, usdc: 0x53844F9577C2334e541Aec7Df7174ECe5dF1fCf0});
     }
 
     function getOrCreateAnvilConfig()
         public
-        view
+        
         returns (NetworkConfig memory)
     {
         if (localNetworkConfig.account != address(0)) {
             return localNetworkConfig;
         }
 
-        vm.startBroadcast(FOUNDRY_DEAFULT_ACCOUNT);
+        vm.startBroadcast(ANVIL_DEFAULT_ACCOUNT);
         EntryPoint entryPoint = new EntryPoint();
         vm.stopBroadcast();
 
+        localNetworkConfig = NetworkConfig({entryPoint: address(entryPoint), account: ANVIL_DEFAULT_ACCOUNT, usdc: 0x53844F9577C2334e541Aec7Df7174ECe5dF1fCf0});
+        return localNetworkConfig; 
     }
 }
