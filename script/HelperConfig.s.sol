@@ -2,6 +2,7 @@
 pragma solidity ^0.8.24;
 
 import {Script} from "lib/forge-std/src/Script.sol";
+import {EntryPoint} from "lib/account-abstraction/contracts/core/EntryPoint.sol";
 
 contract HelperConfig is Script {
     error HelperConfig__InvalidChainId();
@@ -15,6 +16,7 @@ contract HelperConfig is Script {
     uint256 constant ZKSYNC_SEPOLIA_CHAIN_ID = 300;
     uint256 constant LOCAL_CHAIN_ID = 31337;
     address constant BURNER_WALLET = 0x46efA6D7B7b5fc2F63CaA7855a3e6ab31cf8CD47;
+    address constant FOUNDRY_DEAFULT_ACCOUNT = 0x742d35cc6634c0532925a3b844f5131b013b2c1f;
 
     NetworkConfig public localNetworkConfig;
     mapping(uint256 chainId => NetworkConfig) public networkConfigs;
@@ -63,5 +65,10 @@ contract HelperConfig is Script {
         if (localNetworkConfig.account != address(0)) {
             return localNetworkConfig;
         }
+
+        vm.startBroadcast(FOUNDRY_DEAFULT_ACCOUNT);
+        EntryPoint entryPoint = new EntryPoint();
+        vm.stopBroadcast();
+
     }
 }
